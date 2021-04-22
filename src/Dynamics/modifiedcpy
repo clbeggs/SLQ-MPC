@@ -1,0 +1,87 @@
+#include <math.h>
+
+#include <Eigen/Core>
+#include <iostream>
+#include <quadrotor.hpp>
+#include <vector>
+
+state_t forward_dynamics_inert(state_t &x_t, control_t &u_t,
+                               Eigen::Vector3f inertia_diag) {
+  // u_t is angular speeds of rotos in rad / sec
+
+  // positions
+  float x = x_t(0);  // x
+  float y = x_t(1);  // y
+  float z = x_t(2);  // z
+
+  // euler angles xyz
+  float phi = x_t(3);
+  float theta = x_t(4);
+  float psi = x_t(5);
+
+  // positions derivatives
+  float dx = x_t(6);  // x
+  float dy = x_t(7);  // y
+  float dz = x_t(8);  // z
+
+  // euler angle derivatives xyz
+  float dphi = x_t(9);
+  float dtheta = x_t(10);
+  float dpsi = x_t(11);
+
+  state_t next_state = state_t::Zero();
+  // linear velocity
+  next_state(0) = dx;
+  next_state(1) = dy;
+  next_state(2) = dz;
+  // angular velocity
+  next_state(3) = dphi;
+  next_state(4) = dtheta;
+  next_state(5) = dpsi;
+
+  // Angular speeds of rotors
+  float w1 = u_t(0);
+  float w2 = u_t(1);
+  float w3 = u_t(2);
+  float w4 = u_t(3);
+
+  // Compute vertical forces from rotors (3)
+  float F_1 = kF * pow(w1, 2);
+  float F_2 = kF * pow(w2, 2);
+  float F_3 = kF * pow(w3, 2);
+  float F_4 = kF * pow(w4, 2);
+
+  // Compute moments from rotors (4)
+  float M_1 = Km * pow(w1, 2);
+  float M_2 = Km * pow(w2, 2);
+  float M_3 = Km * pow(w3, 2);
+  float M_4 = Km * pow(w4, 2);
+
+  // Computing linear acceleration
+  next_state(6) = (dpsi * dy) - (dtheta * dz) - this->grav_const * sin(theta);
+  next_state(7) =
+      (dtheta * dz) - (dpsi * dx) + this->grav_const * (sin(phi) * cos(theta));
+  next_state(8) =
+      (dtheta * dx) - (dphi * dy) + this->grav_const * (cos(theta) * cos(phi));
+
+  // computing angular acceleration
+  float tau_x =
+      this->thrust_const * this->arm_len * (pow(u(2), 2) - pow(u(0), 2));
+  float tau_y =
+      this->thrust_const * this->arm_len * (pow(u(3), 2) - pow(u(1), 2));
+  float tau_z =
+      this->drag * (pow(u(1), 2) + pow(u(3), 2) - pow(u(0), 2) - pow(u(2), 2));
+
+  next_state(9) = ((inertia_diag(1) - inertia_diag(2)) / inertia_diag(0)) *
+                      (dtheta * dpsi) +
+                  (tau_x / inertia_diag(0));
+  next_state(10) =
+      ((inertia_diag(2) - inertia_diag(0)) / inertia_diag(1)) * (dphi * dpsi) +
+      (tau_y / inertia_diag(1));
+
+  next_state(11) = ((inertia_diag(0) - inertia_diag(1)) / inertia_diag(2)) *
+                       (dtheta * dphi) +
+                   (tau_z / inertia_diag(2));
+
+  return next_state;
+}

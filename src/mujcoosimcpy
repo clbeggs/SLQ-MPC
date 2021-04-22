@@ -1,0 +1,669 @@
+#include <glfw3.h>
+#include <math.h>
+#include <mujoco.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <EigenRand/EigenRand>
+#include <Sim.hpp>
+#include <iostream>
+#include <vector>
+
+// #include <webots/Accelerometer.hpp>
+// #include <webots/Camera.hpp>
+// #include <webots/Compass.hpp>
+// #include <webots/GPS.hpp>
+// #include <webots/Gyro.hpp>
+// #include <webots/InertialUnit.hpp>
+// #include <webots/Keyboard.hpp>
+// #include <webots/LED.hpp>
+// #include <webots/Motor.hpp>
+// #include <webots/Robot.hpp>
+// #include <webots/Supervisor.hpp>
+
+mjModel* m = NULL;
+mjData* d = NULL;
+mjvCamera cam;
+mjvOption opt;
+mjvScene scn;
+mjrContext con;
+GLFWwindow* window;
+bool button_left;
+bool button_middle;
+bool button_right;
+double lastx;
+double lasty;
+
+// keyboard callback
+void keyboard(GLFWwindow* window, int key, int scancode, int act, int mods) {
+  // backspace: reset simulation
+  if (act == GLFW_PRESS && key == GLFW_KEY_BACKSPACE) {
+    mj_resetData(m, d);
+    mj_forward(m, d);
+  }
+}
+
+// mouse button callback
+void mouse_button(GLFWwindow* window, int button, int act, int mods) {
+  // update button state
+  button_left =
+      (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+  button_middle =
+      (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS);
+  button_right =
+      (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+
+  // update mouse position
+  glfwGetCursorPos(window, &lastx, &lasty);
+}
+
+// mouse move callback
+void mouse_move(GLFWwindow* window, double xpos, double ypos) {
+  // no buttons down: nothing to do
+  if (!button_left && !button_middle && !button_right) return;
+
+  // compute mouse displacement, save
+  double dx = xpos - lastx;
+  double dy = ypos - lasty;
+  lastx = xpos;
+  lasty = ypos;
+
+  // get current window size
+  int width, height;
+  glfwGetWindowSize(window, &width, &height);
+
+  // get shift key state
+  bool mod_shift = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+
+  // determine action based on mouse button
+  mjtMouse action;
+  if (button_right)
+    action = mod_shift ? mjMOUSE_MOVE_H : mjMOUSE_MOVE_V;
+  else if (button_left)
+    action = mod_shift ? mjMOUSE_ROTATE_H : mjMOUSE_ROTATE_V;
+  else
+    action = mjMOUSE_ZOOM;
+
+  // move camera
+  mjv_moveCamera(m, action, dx / height, dy / height, &scn, &cam);
+}
+
+// scroll callback
+void scroll(GLFWwindow* window, double xoffset, double yoffset) {
+  // emulate vertical mouse motion = 5% of window height
+  mjv_moveCamera(m, mjMOUSE_ZOOM, 0, -0.05 * yoffset, &scn, &cam);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+
+Sim_Interface::Sim_Interface() {
+}
+
+Sim_Interface::~Sim_Interface() {
+  // close GLFW, free visualization storage
+  glfwTerminate();
+  mjv_freeScene(&scn);
+  mjr_freeContext(&con);
+
+  // free MuJoCo model and data, deactivate
+  mj_deleteData(d);
+  mj_deleteModel(m);
+  mj_deactivate();
+}
+
+Sim_Interface::Sim_Interface(char* model_file) {
+  mj_activate("/home/epiphyte/.mujoco/mjpro150/mjkey.txt");
+  // load and compile model
+  char error[1000] = "Could not load binary model";
+
+  if (strlen(model_file) > 4 &&
+      !strcmp(model_file + strlen(model_file) - 4, ".mjb")) {
+    m = mj_loadModel(model_file, 0);
+  } else {
+    m = mj_loadXML(model_file, 0, error, 1000);
+  }
+
+  if (!m) {
+    std::cout << "COULD NOT LOAD MODEL" << std::endl;
+    mju_error_s("Load model error: %s", error);
+  } else {
+    std::cout << "Loaded model..." << std::endl;
+  }
+
+  // make data
+  d = mj_makeData(m);
+  this->nq = m->nq;
+  this->nv = m->nv;
+
+  // init GLFW
+  if (!glfwInit()) {
+    std::cout << "COULD NOT INISIALIZE GLDFW" << std::endl;
+    mju_error("Could not initialize GLFW");
+  }
+
+  // create window, make OpenGL context current, request v-sync
+  window = glfwCreateWindow(1200, 900, "Demo", NULL, NULL);
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);
+
+  // initialize visualization data structures
+  mjv_defaultCamera(&cam);
+  mjv_defaultOption(&opt);
+  mjr_defaultContext(&con);
+  mjv_makeScene(&scn, 1000);  // space for 1000 objects
+  mjr_makeContext(m, &con,
+                  mjFONTSCALE_100);  // model-specific context
+
+  // install GLFW mouse and keyboard callbacks
+  glfwSetKeyCallback(window, keyboard);
+  glfwSetCursorPosCallback(window, mouse_move);
+  glfwSetMouseButtonCallback(window, mouse_button);
+  glfwSetScrollCallback(window, scroll);
+  // get framebuffer viewport
+  mjrRect viewport = {0, 0, 0, 0};
+  glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
+
+  // update scene and render
+  mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
+  mjr_render(viewport, &scn, &con);
+
+  // swap OpenGL buffers (blocking call due to v-sync)
+  glfwSwapBuffers(window);
+
+  // process pending GUI events, call GLFW callbacks
+  glfwPollEvents();
+}
+void Sim_Interface::step(state_t& resulting_state, state_t& state,
+                         control_t& action) {
+  if (glfwWindowShouldClose(window)) {
+    // CHANGE POSITION
+    d->qpos[0] = state(0);
+    d->qpos[1] = state(1);
+    d->qpos[2] = state(2);
+
+    float cr = cos(state(3) * 0.5);
+    float sr = sin(state(3) * 0.5);
+    float cy = cos(state(4) * 0.5);
+    float sy = sin(state(4) * 0.5);
+    float cp = cos(state(5) * 0.5);
+    float sp = sin(state(5) * 0.5);
+
+    d->qpos[3] = sr * cp * cy - cr * sp * sy;
+    d->qpos[4] = cr * sp * cy + sr * cp * sy;
+    d->qpos[5] = cr * cp * sy - sr * sp * cy;
+    d->qpos[6] = cr * cp * cy + sr * sp * sy;
+
+    // CHANGE VELOCITIES
+    d->qvel[0] = state(6);
+    d->qvel[1] = state(7);
+    d->qvel[2] = state(8);
+
+    cr = cos(state(9) * 0.5);
+    sr = sin(state(9) * 0.5);
+    cy = cos(state(10) * 0.5);
+    sy = sin(state(10) * 0.5);
+    cp = cos(state(11) * 0.5);
+    sp = sin(state(11) * 0.5);
+
+    d->qvel[3] = sr * cp * cy - cr * sp * sy;
+    d->qvel[4] = cr * sp * cy + sr * cp * sy;
+    d->qvel[5] = cr * cp * sy - sr * sp * cy;
+    d->qvel[6] = cr * cp * cy + sr * sp * sy;
+    // advance interactive simulation for 1/60 sec
+    //  Assuming MuJoCo can simulate faster than real-time, which it usually
+    //  can, this loop will finish on time for the next frame to be rendered
+    //  at 60 fps. Otherwise add a cpu timer and exit this loop when it is
+    //  time to render.
+
+    mjtNum simstart = d->time;
+    while (d->time - simstart < 1.0 / 60.0) {
+      mj_step(m, d);
+    }
+
+    // get framebuffer viewport
+    mjrRect viewport = {0, 0, 0, 0};
+    glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
+
+    // update scene and render
+    mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
+    mjr_render(viewport, &scn, &con);
+
+    // swap OpenGL buffers (blocking call due to v-sync)
+    glfwSwapBuffers(window);
+
+    // process pending GUI events, call GLFW callbacks
+    glfwPollEvents();
+
+    // Store resulting_state
+
+    // Position
+    resulting_state(0) = d->qpos[0];
+    resulting_state(1) = d->qpos[1];
+    resulting_state(2) = d->qpos[2];
+
+    // position derivative
+    resulting_state(6) = d->qvel[0];
+    resulting_state(7) = d->qvel[1];
+    resulting_state(8) = d->qvel[2];
+
+    // euler angles
+    Eigen::Vector4f quat;
+    quat << d->qpos[3], d->qpos[4], d->qpos[5], d->qpos[6];
+
+    resulting_state(3) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                               1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+    resulting_state(4) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+    if (resulting_state(4) >= 1) {
+      // use 90 degrees if out of range
+      resulting_state(4) = (3.14159 / 2);
+    }
+
+    resulting_state(5) = atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+                               1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+
+    // euler angles derivative
+    quat(0) = d->qvel[3];
+    quat(1) = d->qvel[4];
+    quat(2) = d->qvel[5];
+    quat(3) = d->qvel[6];
+
+    resulting_state(9) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                               1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+    resulting_state(10) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+    if (resulting_state(10) >= 1) {
+      // use 90 degrees if out of range
+      resulting_state(10) = (3.14159 / 2);
+    }
+
+    resulting_state(11) =
+        atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+              1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+    // Control:
+    d->ctrl[0] = action(0);
+    d->ctrl[1] = action(1);
+    d->ctrl[2] = action(2);
+    d->ctrl[3] = action(3);
+  }
+}
+void Sim_Interface::step(state_t& resulting_state, control_t& action) {
+  if (glfwWindowShouldClose(window)) {
+    // advance interactive simulation for 1/60 sec
+    //  Assuming MuJoCo can simulate faster than real-time, which it usually
+    //  can, this loop will finish on time for the next frame to be rendered at
+    //  60 fps. Otherwise add a cpu timer and exit this loop when it is time to
+    //  render.
+    mjtNum simstart = d->time;
+    while (d->time - simstart < 1.0 / 60.0) {
+      mj_step(m, d);
+    }
+
+    // get framebuffer viewport
+    mjrRect viewport = {0, 0, 0, 0};
+    glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
+
+    // update scene and render
+    mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
+    mjr_render(viewport, &scn, &con);
+
+    // swap OpenGL buffers (blocking call due to v-sync)
+    glfwSwapBuffers(window);
+
+    // process pending GUI events, call GLFW callbacks
+    glfwPollEvents();
+
+    // Store resulting_state
+
+    // Position
+    resulting_state(0) = d->qpos[0];
+    resulting_state(1) = d->qpos[1];
+    resulting_state(2) = d->qpos[2];
+
+    // position derivative
+    resulting_state(6) = d->qvel[0];
+    resulting_state(7) = d->qvel[1];
+    resulting_state(8) = d->qvel[2];
+
+    // euler angles
+    Eigen::Vector4f quat;
+    quat << d->qpos[3], d->qpos[4], d->qpos[5], d->qpos[6];
+
+    resulting_state(3) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                               1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+    resulting_state(4) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+    if (resulting_state(4) >= 1) {
+      // use 90 degrees if out of range
+      resulting_state(4) = (3.14159 / 2);
+    }
+
+    resulting_state(5) = atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+                               1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+
+    // euler angles derivative
+    quat(0) = d->qvel[3];
+    quat(1) = d->qvel[4];
+    quat(2) = d->qvel[5];
+    quat(3) = d->qvel[6];
+
+    resulting_state(9) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                               1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+    resulting_state(10) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+    if (resulting_state(10) >= 1) {
+      // use 90 degrees if out of range
+      resulting_state(10) = (3.14159 / 2);
+    }
+
+    resulting_state(11) =
+        atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+              1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+    // Control:
+    d->ctrl[0] = action(0);
+    d->ctrl[1] = action(1);
+    d->ctrl[2] = action(2);
+    d->ctrl[3] = action(3);
+  }
+}
+
+void Sim_Interface::get_current_state(state_t& resulting_state) {
+  // Position
+  resulting_state(0) = d->qpos[0];
+  resulting_state(1) = d->qpos[1];
+  resulting_state(2) = d->qpos[2];
+
+  // position derivative
+  resulting_state(6) = d->qvel[0];
+  resulting_state(7) = d->qvel[1];
+  resulting_state(8) = d->qvel[2];
+
+  // euler angles
+  Eigen::Vector4f quat;
+  quat << d->qpos[3], d->qpos[4], d->qpos[5], d->qpos[6];
+
+  resulting_state(3) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                             1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+  resulting_state(4) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+  if (resulting_state(4) >= 1) {
+    // use 90 degrees if out of range
+    resulting_state(4) = (3.14159 / 2);
+  }
+
+  resulting_state(5) = atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+                             1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+
+  // euler angles derivative
+  quat(0) = d->qvel[3];
+  quat(1) = d->qvel[4];
+  quat(2) = d->qvel[5];
+  quat(3) = d->qvel[6];
+
+  resulting_state(9) = atan2(2 * (quat(0) * quat(1) + quat(2) * quat(3)),
+                             1 - 2 * (quat(1) * quat(1) + quat(2) * quat(2)));
+
+  resulting_state(10) = asin(2 * (quat(0) * quat(2) - quat(3) * quat(1)));
+
+  if (resulting_state(10) >= 1) {
+    // use 90 degrees if out of range
+    resulting_state(10) = (3.14159 / 2);
+  }
+
+  resulting_state(11) = atan2(2 * (quat(0) * quat(3) + quat(1) * quat(2)),
+                              1 - 2 * (quat(2) * quat(2) + quat(3) * quat(3)));
+}
+
+state_t Sim_Interface::reset_random() {
+  state_t state = ((10) * state_t::Random()) + (state_t::Ones() * 10);
+  // mj_resetData(m, d);
+
+  if (d) {
+    std::cout << "AH" << std::endl;
+    std::cout << "pos: " << d->qpos << std::endl;
+    std::cout << "time: " << d->time << std::endl;
+  } else {
+    std::cout << "NOT GOOD" << std::endl;
+  }
+  // CHANGE POSITION
+  d->qpos[0] = state(0);
+  d->qpos[1] = state(1);
+  d->qpos[2] = state(2);
+
+  float cr = cos(state(3) * 0.5);
+  float sr = sin(state(3) * 0.5);
+  float cy = cos(state(4) * 0.5);
+  float sy = sin(state(4) * 0.5);
+  float cp = cos(state(5) * 0.5);
+  float sp = sin(state(5) * 0.5);
+
+  d->qpos[3] = sr * cp * cy - cr * sp * sy;
+  d->qpos[4] = cr * sp * cy + sr * cp * sy;
+  d->qpos[5] = cr * cp * sy - sr * sp * cy;
+  d->qpos[6] = cr * cp * cy + sr * sp * sy;
+
+  // CHANGE VELOCITIES
+  d->qvel[0] = state(6);
+  d->qvel[1] = state(7);
+  d->qvel[2] = state(8);
+
+  cr = cos(state(9) * 0.5);
+  sr = sin(state(9) * 0.5);
+  cy = cos(state(10) * 0.5);
+  sy = sin(state(10) * 0.5);
+  cp = cos(state(11) * 0.5);
+  sp = sin(state(11) * 0.5);
+
+  d->qvel[3] = sr * cp * cy - cr * sp * sy;
+  d->qvel[4] = cr * sp * cy + sr * cp * sy;
+  d->qvel[5] = cr * cp * sy - sr * sp * cy;
+  d->qvel[6] = cr * cp * cy + sr * sp * sy;
+
+  return state;
+}
+
+// Sim_Interface::Sim_Interface() {
+// robot = new webots::Supervisor();
+// robot_node = robot->getSelf();
+// if (robot_node == NULL) {
+// std::cout << "QUADROTOR IS NULL!" << std::endl;
+// }
+
+// // robot = new webots::Robot();
+// // Init sensors
+// imu = robot->getInertialUnit("inertial unit");
+// gyro = robot->getGyro("gyro");
+// compass = robot->getCompass("compass");
+// accelerometer = robot->getAccelerometer("accelerometer");
+// cam = robot->getCamera("camera");
+
+// // Init motors
+// motors[0] = robot->getMotor("front left propeller");
+// motors[1] = robot->getMotor("front right propeller");
+// motors[2] = robot->getMotor("rear left propeller");
+// motors[3] = robot->getMotor("rear right propeller");
+
+// // Enable sensors
+// current_time = (int)robot->getBasicTimeStep();
+// imu->enable(current_time);
+// accelerometer->enable(current_time);
+// gyro->enable(current_time);
+// compass->enable(current_time);
+// cad->enable(current_time);
+
+// motors[0]->setPosition(INFINITY);
+// motors[1]->setPosition(INFINITY);
+// motors[2]->setPosition(INFINITY);
+// motors[3]->setPosition(INFINITY);
+// motors[0]->setVelocity(1.0);
+// motors[1]->setVelocity(-1.0);
+// motors[2]->setVelocity(-1.0);
+// motors[3]->setVelocity(1.0);
+// robot->step(current_time);
+// }
+
+// Sim_Interface::~Sim_Interface() {
+// }
+
+// std::vector<state_t> Sim_Interface::rollout(
+// std::vector<control_t> action_sequence, state_t x_0) {
+// std::vector<state_t> state_sequence;
+// state_sequence.push_back(x_0);  // TODO: Change with reserve()
+
+// state_t cur_state = x_0;
+// state_t next_state;
+
+// for (int i = 0; i < action_sequence.size(); i++) {
+// step(next_state, cur_state, action_sequence[i]);
+// state_sequence.push_back(next_state);
+// cur_state = next_state;
+// }
+
+// return state_sequence;
+// }
+
+// void Sim_Interface::get_current_state(state_t &state) {
+// const double roll = imu->getRollPitchYaw()[0] + M_PI;  // same as phi
+// const double pitch = imu->getRollPitchYaw()[1];        // same as theta
+// const double yaw = imu->getRollPitchYaw()[2];          // same as psi
+// }
+
+// void Sim_Interface::step(state_t &resulting_state, state_t &state,
+// control_t &action) {
+// // Actuate motors
+// motors[0]->setVelocity((double)action(0));
+// motors[1]->setVelocity(-(double)action(1));
+// motors[2]->setVelocity(-(double)action(2));
+// motors[3]->setVelocity((double)action(3));
+
+// // Step in sim
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// printf("STEP===============================================\n");
+// robot->step(current_time);
+
+// // angular positions
+// // const double roll = imu->getRollPitchYaw()[0] + M_PI; // same as phi
+// // const double pitch = imu->getRollPitchYaw()[1];       // same as
+// // theta const double yaw = imu->getRollPitchYaw()[2];         // same
+// // as psi
+
+// // angular velocities
+// const double roll_velocity = gyro->getValues()[0];
+// const double pitch_velocity = gyro->getValues()[1];
+// const double yaw_velocity = gyro->getValues()[2];
+
+// // position accelerations
+// const double x_accel = accelerometer->getValues()[0];
+// const double y_accel = accelerometer->getValues()[1];
+// const double z_accel = accelerometer->getValues()[2];
+
+// // position velocity from angular velocity
+// //
+// https://physics.stackexchange.com/questions/53843/3d-get-linear-velocity-from-position-and-angular-velocity
+
+// // position velocities
+
+// // TODO: Derivative approximation, from current and past angular
+// velocities
+// // angular accelerations
+// webots::Field *trans_field = robot_node->getField("translation");
+// const double *pos = trans_field->getSFVec3f();
+// const double *vel = robot_node->getVelocity();
+// const double *pos2 = robot_node->getPosition();
+// printf("getPosition: (%f, %f, %f)\n", pos2[0], pos2[1], pos2[2]);
+// printf("getVelocity: (%f, %f, %f)\n", vel[0], vel[1], vel[2]);
+// printf("pos: (%f, %f, %f)\n", pos[0], pos[1], pos[2]);
+
+// // Populate state vector
+// // resulting_state(0, 2) = 0;
+// resulting_state(0) = (float)pos[0];
+// resulting_state(1) = (float)pos[1];
+// resulting_state(2) = (float)pos[2];
+// resulting_state(3) = (float)roll_velocity;
+// resulting_state(4) = (float)pitch_velocity;
+// resulting_state(5) = (float)yaw_velocity;
+// resulting_state(6) = (float)x_accel;
+// resulting_state(7) = (float)y_accel;
+// resulting_state(8) = (float)z_accel;
+// }
+
+// state_t Sim_Interface::get_initial_state() {
+// state_t x;
+// webots::Field *trans_field = robot_node->getField("translation");
+// webots::Field *rot_field = robot_node->getField("rotation");
+// const double *pos = trans_field->getSFVec3f();
+// const double *rot = rot_field->getSFRotation();
+// }
+
+// state_t Sim_Interface::reset_random() {
+// const webots::Supervisor::SimulationMode mode =
+// robot->simulationGetMode(); robot->simulationSetMode(
+// webots::Supervisor::SimulationMode::SIMULATION_MODE_PAUSE);
+// // Eigen::Rand::Vmt19937_64 urng{42};
+
+// // Eigen::Vector3f mean = Eigen::Vector3f::Ones();
+// // Eigen::Matrix3f cov = Eigen::Matrix3f::Zero();
+
+// // constructs MvNormalGen with Scalar=float, Dim=4
+// // Eigen::Rand::MvNormalGen<float, 3> gen1{mean, cov};
+// // Eigen::Vector3f new_pos = gen1.generate(urng);
+// Eigen::Vector3f new_pos =
+// Eigen::Vector3f::Random() + Eigen::Vector3f::Ones() * 2;
+
+// webots::Field *trans_field = robot_node->getField("translation");
+// webots::Field *rot_field = robot_node->getField("rotation");
+// const double rot_vals[4] = {-0.024659, -0.706892, -0.706891, -3.0923};
+// rot_field->setSFRotation(rot_vals);
+
+// // const double vals[3] = {new_pos(0), new_pos(1), new_pos(2)};
+// const double vals[3] = {1.0, 1.0, 1.0};
+// const double *old = trans_field->getSFVec3f();
+
+// printf("New Position: (%f, %f, %f)\n", vals[0], vals[1], vals[2]);
+// printf("Old Position: (%f, %f, %f)\n", old[0], old[1], old[2]);
+
+// robot->simulationResetPhysics();
+// robot->simulationReset();
+
+// trans_field->setSFVec3f(vals);
+// robot_node->resetPhysics();
+
+// state_t pos = state_t::Zero();
+// pos(0) = vals[0];
+// pos(1) = vals[1];
+// pos(2) = vals[2];
+
+// pos(3) = -1.5707981;
+// pos(4) = 0.0697283;
+// pos(5) = -3.1415817;
+
+// robot->simulationSetMode(mode);
+// return pos;
+// }
+// void Sim_Interface::reset_random(state_t state, control_t action) {
+// }
