@@ -4,17 +4,19 @@
 #include <Dynamics.hpp>
 #include <Eigen/Core>
 #include <LQR.hpp>
+#include <MujocoInterface.hpp>
+#include <Robots.hpp>
 #include <Sim.hpp>
 #include <types.hpp>
 #include <vector>
-
 using std::vector;
 
 // clang-format off
 class SLQ : public LQR {
  public:
   SLQ();
-  SLQ(Sim_Interface *sim, state_t initial_state);
+  SLQ(RobotInterface *sim, state_t &initial_state);
+  SLQ(RobotInterface *sim, MujocoSimulator *M, state_t &initial_state);
   ~SLQ();
 
   // Main algo driver
@@ -59,7 +61,8 @@ class SLQ : public LQR {
   bool _check_converged(vector<lqr_t> &initial_cost, vector<lqr_t> &new_cost);
 
   LQR lqr;
-  Sim_Interface *simulator;
+  RobotInterface *simulator;
+  MujocoSimulator *M;
   Quadrotor sys;
   float _delta = 1.0;
   float _delta_2 = 1.0;

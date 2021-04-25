@@ -10,7 +10,7 @@ using std::vector;
 
 LQR::LQR() {
 }
-LQR::LQR(state_t x_g) {
+LQR::LQR(state_t &x_g) {
   this->goal_state = x_g;
 }
 LQR::~LQR() {

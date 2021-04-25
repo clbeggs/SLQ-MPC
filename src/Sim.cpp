@@ -18,74 +18,48 @@ Sim_Interface::Sim_Interface() {
   robot = new webots::Supervisor();
   robot_node = robot->getSelf();
   if (robot_node == NULL) {
-    std::cout << "QUADROTOR IS NULL!" << std::endl;
+    std::cout << "Robot Node IS NULL!" << std::endl;
   }
 
-  // robot = new webots::Robot();
   // Init sensors
-  imu = robot->getInertialUnit("inertial unit");
-  gyro = robot->getGyro("gyro");
-  compass = robot->getCompass("compass");
-  accelerometer = robot->getAccelerometer("accelerometer");
-  cam = robot->getCamera("camera");
+  // imu = robot->getInertialUnit("inertial unit");
+  // gyro = robot->getGyro("gyro");
+  // compass = robot->getCompass("compass");
+  // accelerometer = robot->getAccelerometer("accelerometer");
+  // cam = robot->getCamera("camera");
+  pendulum_motor = robot->getMotor("horizontal_motor");
+  pos_sensor = robot->getPositionSensor("horizontal position sensor");
+  hip_sensor = robot->getPositionSensor("hip");
 
   // Init motors
-  motors[0] = robot->getMotor("front left propeller");
-  motors[1] = robot->getMotor("front right propeller");
-  motors[2] = robot->getMotor("rear left propeller");
-  motors[3] = robot->getMotor("rear right propeller");
+  // motors[0] = robot->getMotor("front left propeller");
+  // motors[1] = robot->getMotor("front right propeller");
+  // motors[2] = robot->getMotor("rear left propeller");
+  // motors[3] = robot->getMotor("rear right propeller");
 
   // Enable sensors
   current_time = (int)robot->getBasicTimeStep();
-  imu->enable(current_time);
-  accelerometer->enable(current_time);
-  gyro->enable(current_time);
-  compass->enable(current_time);
-  cam->enable(current_time);
 
-  motors[0]->setPosition(INFINITY);
-  motors[1]->setPosition(INFINITY);
-  motors[2]->setPosition(INFINITY);
-  motors[3]->setPosition(INFINITY);
-  motors[0]->setVelocity(1.0);
-  motors[1]->setVelocity(-1.0);
-  motors[2]->setVelocity(-1.0);
-  motors[3]->setVelocity(1.0);
+  pos_sensor->enable(current_time);
+  hip_sensor->enable(current_time);
+  // imu->enable(current_time);
+  // accelerometer->enable(current_time);
+  // gyro->enable(current_time);
+  // compass->enable(current_time);
+  // cam->enable(current_time);
+
+  // motors[0]->setPosition(INFINITY);
+  // motors[1]->setPosition(INFINITY);
+  // motors[2]->setPosition(INFINITY);
+  // motors[3]->setPosition(INFINITY);
+  // motors[0]->setVelocity(1.0);
+  // motors[1]->setVelocity(-1.0);
+  // motors[2]->setVelocity(-1.0);
+  // motors[3]->setVelocity(1.0);
   robot->step(current_time);
-
-  webots::Field *tst = robot_node->getField("physics");
-  webots::Field *tstp = robot_node->getProtoField("physics");
-  if (tst) {
-    printf("GET FIELD IS GOOD:\n");
-  } else {
-    printf("GET FIELD IS NOTTTTTt GOOD:\n");
-  }
-  if (tstp) {
-    printf("GET PROTo FIELD IS GOOD:\n");
-
-  } else {
-    printf("GET pROToOOO FIELD IS NOTTTTTt GOOD:\n");
-  }
 }
 
 Sim_Interface::~Sim_Interface() {
-}
-
-std::vector<state_t> Sim_Interface::rollout(
-    std::vector<control_t> action_sequence, state_t x_0) {
-  std::vector<state_t> state_sequence;
-  state_sequence.push_back(x_0);  // TODO: Change with reserve()
-
-  state_t cur_state = x_0;
-  state_t next_state;
-
-  for (int i = 0; i < action_sequence.size(); i++) {
-    step(next_state, cur_state, action_sequence[i]);
-    state_sequence.push_back(next_state);
-    cur_state = next_state;
-  }
-
-  return state_sequence;
 }
 
 void Sim_Interface::get_current_state(state_t &state) {
@@ -170,14 +144,6 @@ void Sim_Interface::step(state_t &resulting_state, state_t &state,
   resulting_state(8) = (float)z_accel;
 }
 
-state_t Sim_Interface::get_initial_state() {
-  state_t x;
-  webots::Field *trans_field = robot_node->getField("translation");
-  webots::Field *rot_field = robot_node->getField("rotation");
-  const double *pos = trans_field->getSFVec3f();
-  const double *rot = rot_field->getSFRotation();
-}
-
 state_t Sim_Interface::reset_random() {
   const webots::Supervisor::SimulationMode mode = robot->simulationGetMode();
   robot->simulationSetMode(
@@ -222,6 +188,4 @@ state_t Sim_Interface::reset_random() {
 
   robot->simulationSetMode(mode);
   return pos;
-}
-void Sim_Interface::reset_random(state_t state, control_t action) {
 }

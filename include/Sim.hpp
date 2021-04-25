@@ -14,6 +14,7 @@
 #include <webots/Keyboard.hpp>
 #include <webots/LED.hpp>
 #include <webots/Motor.hpp>
+#include <webots/PositionSensor.hpp>
 #include <webots/Robot.hpp>
 #include <webots/Supervisor.hpp>
 class Sim_Interface {
@@ -22,15 +23,8 @@ class Sim_Interface {
   ~Sim_Interface();
 
   void step(state_t &resulting_state, state_t &state, control_t &action);
-  void step(state_t &resulting_state, control_t &action);
   void get_current_state(state_t &state);
-
   state_t reset_random();
-  state_t get_initial_state();
-  void reset_random(state_t state, control_t action);
-
-  std::vector<state_t> rollout(std::vector<control_t> action_sequence,
-                               state_t x_0);
 
  private:
   webots::Supervisor *robot;
@@ -40,9 +34,12 @@ class Sim_Interface {
   webots::Compass *compass;
   webots::Accelerometer *accelerometer;
   webots::Camera *cam;
+  webots::Motor *pendulum_motor;
+  webots::PositionSensor *pos_sensor;
+  webots::PositionSensor *hip_sensor;
 
-  int current_time;
   std::array<webots::Motor *, 4> motors;
+  int current_time;
 };
 
 #endif  // SIM_H

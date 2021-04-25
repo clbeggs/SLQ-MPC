@@ -26,21 +26,21 @@ bool CARE::solve_iterative(schur_matrix_t &M, state_matrix_t &P, int max_iters,
 
     iters++;
   }
-  /* break down W and extract W11 W12 W21 W22  (what is the size of these?) */
-  state_matrix_t M11(Mlocal.template block<12, 12>(0, 0));
-  state_matrix_t M12(Mlocal.template block<12, 12>(0, 12));
-  state_matrix_t M21(Mlocal.template block<12, 12>(12, 0));
-  state_matrix_t M22(Mlocal.template block<12, 12>(12, 12));
+  /* break down W and extract W11 W4 W21 W22  (what is the size of these?) */
+  state_matrix_t M11(Mlocal.template block<4, 4>(0, 0));
+  state_matrix_t M4(Mlocal.template block<4, 4>(0, 4));
+  state_matrix_t M21(Mlocal.template block<4, 4>(4, 0));
+  state_matrix_t M22(Mlocal.template block<4, 4>(4, 4));
 
   /* find M and N using the elements of W	 */
   factor_matrix_t U;
   factor_matrix_t V;
 
-  U.template block<12, 12>(0, 0) = M12;
-  U.template block<12, 12>(12, 0) = M22 + state_matrix_t::Identity();
+  U.template block<4, 4>(0, 0) = M4;
+  U.template block<4, 4>(4, 0) = M22 + state_matrix_t::Identity();
 
-  V.template block<12, 12>(0, 0) = M11 + state_matrix_t::Identity();
-  V.template block<12, 12>(12, 0) = M21;
+  V.template block<4, 4>(0, 0) = M11 + state_matrix_t::Identity();
+  V.template block<4, 4>(4, 0) = M21;
 
   /* Solve for S from the equation   MS=N */
   FullPivLU_.compute(U);

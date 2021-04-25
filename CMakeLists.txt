@@ -105,6 +105,7 @@ include_directories(
     $ENV{WEBOTS_HOME}/include/controller/c 
     $ENV{WEBOTS_HOME}/include/controller/cpp
     ${CMAKE_SOURCE_DIR}/include/Dynamics
+    ${CMAKE_SOURCE_DIR}/include/Robots
     ${CMAKE_SOURCE_DIR}/include
     /home/epiphyte/EigenRand-0.3.3
 )
@@ -113,6 +114,7 @@ file(GLOB
     CPP_SOURCES
     ${CMAKE_SOURCE_DIR}/src/*.cpp
     ${CMAKE_SOURCE_DIR}/src/Dynamics/*.cpp
+    ${CMAKE_SOURCE_DIR}/src/Robots/*.cpp
 )
 
 add_executable(SLQ_MPC ${CPP_SOURCES})

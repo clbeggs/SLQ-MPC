@@ -8,8 +8,8 @@
 
 class CARE {
  private:
-  typedef Eigen::Matrix<float, 24, 24> schur_matrix_t;
-  typedef Eigen::Matrix<float, 24, 12> factor_matrix_t;
+  typedef Eigen::Matrix<float, 8, 8> schur_matrix_t;
+  typedef Eigen::Matrix<float, 8, 4> factor_matrix_t;
   Eigen::RealSchur<schur_matrix_t> schur_;
   Eigen::FullPivLU<factor_matrix_t> FullPivLU_;
   int LWORK_;

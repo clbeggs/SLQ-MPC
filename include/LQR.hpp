@@ -14,7 +14,7 @@ using std::vector;
 class LQR : public CARE {
  public:
   LQR();
-  LQR(state_t goal_state);
+  LQR(state_t &goal_state);
   ~LQR();
   /*!
      Q - intermediate cost

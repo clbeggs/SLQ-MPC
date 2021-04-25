@@ -1,3 +1,4 @@
+#include <math.h>
 #include <mjxmacro.h>
 #include <mujoco.h>
 #include <stdio.h>
@@ -113,11 +114,17 @@ void MujocoSimulator::_change_state(state_t& x) {
 
 void MujocoSimulator::_actuate_motors(control_t& u) {
   double thrust_1, thrust_2, thrust_3, thrust_4;
-  thrust_1 = (0.00026) * abs(u(0)) * u(0);
+  u(0) = fmax(0, fmin(abs(u(0)), 576));
+  u(1) = fmax(0, fmin(abs(u(1)), 576));
+  u(2) = fmax(0, fmin(abs(u(2)), 576));
+  u(3) = fmax(0, fmin(abs(u(3)), 576));
+
+  // clang-format off
+  thrust_1 = (0.00026)  * abs(u(0)) * u(0);
   thrust_2 = (-0.00026) * abs(u(1)) * u(1);
   thrust_3 = (-0.00026) * abs(u(2)) * u(2);
-  thrust_4 = (0.00026) * abs(u(3)) * u(3);
-  std::cout << "THRUST: " << (0.00026) * abs(u(3)) * u(3) << std::endl;
+  thrust_4 = (0.00026)  * abs(u(3)) * u(3);
+  // clang-format on
   this->model_state->act[0] = thrust_1;
   this->model_state->act[1] = thrust_2;
   this->model_state->act[2] = thrust_3;
@@ -126,19 +133,6 @@ void MujocoSimulator::_actuate_motors(control_t& u) {
 
 state_t MujocoSimulator::_get_state() {
   state_t x;
-
-  std::cout << "GET STATE" << std::endl;
-  std::cout << "GET STATE" << std::endl;
-  std::cout << "GET STATE" << std::endl;
-  std::cout << "GET STATE" << std::endl;
-  std::cout << this->model_state->qpos[0] << std::endl;
-  std::cout << this->model_state->qpos[1] << std::endl;
-  std::cout << this->model_state->qpos[2] << std::endl;
-
-  std::cout << "GET STATE float" << std::endl;
-  std::cout << (float)this->model_state->qpos[0] << std::endl;
-  std::cout << (float)this->model_state->qpos[1] << std::endl;
-  std::cout << (float)this->model_state->qpos[2] << std::endl;
 
   x(0) = (float)this->model_state->qpos[0];
   x(1) = (float)this->model_state->qpos[1];
@@ -179,14 +173,7 @@ trajectory_t MujocoSimulator::mujoco_rollout(std::vector<control_t>& u,
   // Fill in all quantaties
   mj_forward(this->model, this->model_state);
 
-  printf("MODEL QPOS: \n");
-  std::cout << this->model_state->qpos[0] << std::endl;
-  std::cout << this->model_state->qpos[1] << std::endl;
-  std::cout << this->model_state->qpos[2] << std::endl;
-
   int N = u.size();
-  printf("U SIZE: \n");
-  std::cout << u.size() << std::endl;
 
   trajectory_t traj(N, initial_state);
   for (int i = 0; i < u.size() - 1; i++) {
@@ -197,4 +184,40 @@ trajectory_t MujocoSimulator::mujoco_rollout(std::vector<control_t>& u,
   }
 
   return traj;
+}
+
+double MujocoSimulator::_perturb(state_t& x0, state_t& perturbed_state) {
+  _change_state(x0);
+  // Fill in all quantaties
+  mj_forward(this->model, this->model_state);
+  state_t initial = _get_state();
+
+  _change_state(perturbed_state);
+  // Fill in all quantaties
+  mj_forward(this->model, this->model_state);
+  mjtNum simstart = model_state->time;
+  while (model_state->time - simstart < this->time_step_size) {
+    mj_step(model, model_state);
+  }
+  state_t next_state = _get_state();
+}
+
+void MujocoSimulator::compute_jacobians() {
+  state_t original_state = _get_state();
+}
+
+void MujocoSimulator::linearize_trajectory(trajectory_t& traj) {
+  // numerical differentiation using five point forward and backward differences
+  int N = traj.x.size();
+  if (N < 10) {
+    std::cout << "ERROR, TRAJECTORY LESS THAN 5 STEPS!!!" << std::endl;
+    throw -1;
+  }
+
+  // TODO: CHANGE THIS
+  float h = 0.002;  // default mujoco time step
+
+  // for (int i = 0; i < 5; ++i) {
+  // // traj.x[i] = (-25 * ) / h;
+  // }
 }

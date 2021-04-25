@@ -5,12 +5,12 @@
 #include <vector>
 using std::vector;
 
-typedef Eigen::Matrix<float, 12, 1> state_t;
-typedef Eigen::Matrix<float, 4, 1> control_t;
-typedef Eigen::Matrix<float, 12, 12> state_matrix_t;
-typedef Eigen::Matrix<float, 4, 4> control_matrix_t;
-typedef Eigen::Matrix<float, 12, 4> control_gain_matrix_t;
-typedef Eigen::Matrix<float, 4, 12> control_feedback_t;
+typedef Eigen::Matrix<float, 4, 1> state_t;
+typedef Eigen::Matrix<float, 1, 1> control_t;
+typedef Eigen::Matrix<float, 4, 4> state_matrix_t;
+typedef Eigen::Matrix<float, 1, 1> control_matrix_t;
+typedef Eigen::Matrix<float, 4, 1> control_gain_matrix_t;
+typedef Eigen::Matrix<float, 1, 4> control_feedback_t;
 
 struct lqr_t {
   lqr_t() { l_t = control_t::Zero(); }

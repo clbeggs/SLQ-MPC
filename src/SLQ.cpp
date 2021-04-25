@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <LQR.hpp>
+#include <MujocoInterface.hpp>
 #include <SLQ.hpp>
 #include <iostream>
 #include <types.hpp>
@@ -15,10 +16,17 @@ SLQ::SLQ() {
 SLQ::~SLQ() {
 }
 
-SLQ::SLQ(Sim_Interface *sim, state_t initial_state) {
+SLQ::SLQ(RobotInterface *sim, state_t &initial_state) {
   this->simulator = sim;
   this->_current_state = initial_state;
-  this->_current_action << 1.0, 1.0, 1.0, 1.0;
+  this->_current_action = control_t::Ones();
+}
+
+SLQ::SLQ(RobotInterface *sim, MujocoSimulator *M, state_t &initial_state) {
+  this->simulator = sim;
+  this->_current_state = initial_state;
+  this->_current_action = control_t::Ones();
+  this->M = M;
 }
 
 ///////////////////////
@@ -65,6 +73,7 @@ vector<forward_t> SLQ::_forward_rollout(state_t &initial_state,
 
   for (int i = 0; i < N - 1; i++) {
     result[i + 1].x = sys.forward_dynamics(result[i].x, u[i]);
+    // result[i + 1].x = this->M->mujoco_forward_dyn(result[i].x, u[i]);
     result[i].l = cost_fn.l(result[i].x, u[i], Q, R, false);
     result[i].l_x = cost_fn.l_x(result[i].x, u[i], Q, R, false);
 
@@ -136,6 +145,7 @@ void SLQ::solve_slq(state_matrix_t &Q,
 
   // Simulate system dynamics
   trajectory_t old_traj = sys.simulate_rollout(u, x_0);
+  // trajectory_t old_traj = M->mujoco_rollout(u, x_0);
 
   // Linearize dynamics along trajectory
   sys.linearize_trajectory(old_traj);
@@ -148,6 +158,7 @@ void SLQ::solve_slq(state_matrix_t &Q,
   while (this->max_loop_iters > main_loop_iters) {
     // Simulate system dynamics
     trajectory_t traj = sys.simulate_rollout(u, x_0);
+    // trajectory_t traj = M->mujoco_rollout(u, x_0);
 
     // Linearize dynamics along trajectory
     sys.linearize_trajectory(traj);
