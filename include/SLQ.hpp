@@ -20,7 +20,7 @@ class SLQ : public LQR {
   ~SLQ();
 
   // Main algo driver
-  void solve_slq(state_matrix_t &Q,
+  state_t solve_slq(state_matrix_t &Q,
                  control_matrix_t &R,
                  state_matrix_t &W,
                  state_matrix_t &H,
@@ -51,6 +51,8 @@ class SLQ : public LQR {
             state_t &x_0,
             state_t &x_g);
 
+
+
  protected:
 
   // Utility functions
@@ -63,7 +65,7 @@ class SLQ : public LQR {
   LQR lqr;
   RobotInterface *simulator;
   MujocoSimulator *M;
-  Quadrotor sys;
+  CartPole sys;
   float _delta = 1.0;
   float _delta_2 = 1.0;
   float _mu = 1.0;
@@ -72,7 +74,7 @@ class SLQ : public LQR {
   int max_loop_iters = 100;
   int max_line_search= 5;
   float alpha_d = 0.2;  // TODO: UPDATE
-  float alpha = 0.0;
+  float alpha = 0.1;
 
   state_t _current_state;
   control_t _current_action;

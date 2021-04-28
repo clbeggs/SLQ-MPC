@@ -8,9 +8,10 @@
 class CostFunction {
  public:
   CostFunction() {
-    this->_stable_state << 1, 1, 1, -1.5707943, 0.0636659, -1.047188, 0, 0, 0,
-        0, 0, 0;
-    this->_hover << 69, 69, 69, 69;
+    this->_stable_state = state_t::Ones();
+    this->_hover = control_t::Zero();
+    this->goal_state = state_t::Zero();
+    this->goal_action = control_t::Zero();
   }
 
   CostFunction(state_t &goal_state, control_t &goal_action) : CostFunction() {

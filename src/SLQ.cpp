@@ -134,7 +134,7 @@ void SLQ::second_expansion(forward_t &f_out, state_t &V_x, state_matrix_t &V_xx,
 }
 
 // clang-format off
-void SLQ::solve_slq(state_matrix_t &Q,
+state_t SLQ::solve_slq(state_matrix_t &Q,
                     control_matrix_t &R,
                     state_matrix_t &W,
                     state_matrix_t &P_tf,
@@ -142,6 +142,7 @@ void SLQ::solve_slq(state_matrix_t &Q,
                     state_t &x_0, 
                     state_t &x_g) {
   // clang-format on
+  lqr.change_goal(x_g);
 
   // Simulate system dynamics
   trajectory_t old_traj = sys.simulate_rollout(u, x_0);
@@ -169,14 +170,45 @@ void SLQ::solve_slq(state_matrix_t &Q,
     // Line search to update control
     int N = traj.x.size();
     for (int i = 0; i < N; i++) {
-      u[i] = u[i] + this->alpha * ric[i].l_t +
-             ric[i].K * (traj.x[i] - old_traj.x[i]);
+      std::cout << (ric[i].K * (traj.x[i] - old_traj.x[i])) << std::endl;
+      u[i] = u[i] + (this->alpha * ric[i].l_t) +
+             (ric[i].K * (traj.x[i] - old_traj.x[i]));
+      for (int j = 0; j < u[i].rows(); ++j) {
+        if (isnan(u[i](j))) {
+          u[i] = control_t::Ones() * 40.0;
+        }
+      }
+      u[i] = u[i].array().min(40.0).max(-40.0).matrix();
     }
 
+    traj = sys.simulate_rollout(u, x_0);
+    sys.linearize_trajectory(traj);
     J_new = cost_fn.quadratize_trajectory_cost(traj, Q, R, P_tf);
     if (J_new < J_0) {
       break;
     }
     main_loop_iters += 1;
+  }
+  state_t final_state;
+  simulator->step(final_state, x_0, u[0]);
+  std::cout << "STEP: " << u[0] << std::endl;
+  return final_state;
+}
+
+fit_t SLQ::fit(state_matrix_t &Q, control_matrix_t &R, state_matrix_t &W,
+               state_matrix_t &H, vector<control_t> &initial_control,
+               state_t &x_0, state_t &x_g) {
+  lqr.change_goal(x_g);
+  bool changed, converged;
+  changed = true;
+  converged = false;
+  vector<forward_t> forward_pass;
+  vector<backward_t> backward_out;
+
+  for (int i = 0; i < this->max_loop_iters; ++i) {
+    if (changed) {
+      forward_pass = _forward_rollout(x_0, initial_control, Q, R, H, x_g);
+      changed = false;
+    }
   }
 }

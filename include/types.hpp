@@ -5,16 +5,35 @@
 #include <vector>
 using std::vector;
 
-typedef Eigen::Matrix<float, 4, 1> state_t;
-typedef Eigen::Matrix<float, 1, 1> control_t;
-typedef Eigen::Matrix<float, 4, 4> state_matrix_t;
-typedef Eigen::Matrix<float, 1, 1> control_matrix_t;
-typedef Eigen::Matrix<float, 4, 1> control_gain_matrix_t;
-typedef Eigen::Matrix<float, 1, 4> control_feedback_t;
+// typedef Eigen::Matrix<double, STATE_DIM, STATE_DIM> state_matrix_t;
+// typedef Eigen::Matrix<double, CONTROL_DIM, CONTROL_DIM> control_matrix_t;
+// typedef Eigen::Matrix<double, CONTROL_DIM, STATE_DIM> control_state_matrix_t;
+// typedef Eigen::Matrix<double, STATE_DIM, CONTROL_DIM> control_gain_matrix_t;
+// typedef Eigen::Matrix<double, CONTROL_DIM, STATE_DIM> control_feedback_t;
+
+// typedef Eigen::Matrix<double, 2 * STATE_DIM, 2 * STATE_DIM> schur_matrix_t;
+// typedef Eigen::Matrix<double, 2 * STATE_DIM, STATE_DIM> factor_matrix_t;
+
+typedef Eigen::Matrix<double, 8, 8> schur_matrix_t;
+typedef Eigen::Matrix<double, 8, 4> factor_matrix_t;
+
+typedef Eigen::Matrix<double, 4, 1> state_t;
+typedef Eigen::Matrix<double, 1, 1> control_t;
+typedef Eigen::Matrix<double, 4, 4> state_matrix_t;
+typedef Eigen::Matrix<double, 1, 1> control_matrix_t;
+typedef Eigen::Matrix<double, 4, 1> control_gain_matrix_t;
+typedef Eigen::Matrix<double, 1, 4> control_feedback_t;
 
 struct lqr_t {
   lqr_t() { l_t = control_t::Zero(); }
-  lqr_t(float val) { l_t = control_t::Ones() * val; }
+  lqr_t(double val) {
+    l_t = control_t::Ones() * val;
+    K = control_feedback_t::Zero();
+    P = state_matrix_t::Zero();
+    p = state_t::Zero();
+    r = control_t::Zero();
+    q = state_t::Zero();
+  }
   control_t l_t;
   control_feedback_t K;
   state_matrix_t P;
@@ -24,7 +43,14 @@ struct lqr_t {
 };
 
 struct cost_t {
-  float J;
+  cost_t() {
+    J = 0.0;
+    l_x = state_t::Zero();
+    l_t = control_t::Zero();
+    p = state_t::Zero();
+  }
+
+  double J;
   state_t l_x;
   control_t l_t;
   state_t p;
@@ -36,7 +62,7 @@ struct cost_t {
 // };
 
 struct forward_t {
-  float l;
+  double l;
   control_t l_u;
   state_t l_x;
   state_matrix_t l_xx;

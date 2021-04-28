@@ -26,7 +26,9 @@ state_t CostFunction::l_x(state_t &x,
                           control_matrix_t &R,
                           bool terminal) {
   // clang-format on
-  return (x - this->goal_state).transpose() * (Q + Q.transpose());
+  // return (x - this->goal_state).transpose() * (Q + Q.transpose());
+  return (Q * (x - this->goal_state)) +
+         (Q.transpose() * (x - this->goal_state));
 }
 
 // clang-format off
@@ -39,7 +41,9 @@ control_t CostFunction::l_u(state_t &x,
   if (terminal) {
     return control_t::Zero();
   } else {
-    return (u - this->goal_action).transpose() * (R + R.transpose());
+    // return (u - this->goal_action).transpose() * (R + R.transpose());
+    return (R * (u - this->goal_action)) +
+           (R.transpose() * u - this->goal_action);
   }
 }
 

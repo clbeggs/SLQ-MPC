@@ -20,6 +20,8 @@ class CartPole {
                           state_t &x_t, control_t &u_t);
 
   void linearize_trajectory(trajectory_t &traj);
+  state_matrix_t f_x(state_t &x, control_t &u);
+  control_gain_matrix_t f_u(state_t &x, control_t &u);
 
  private:
   float mass_pole, mass_cart, pole_length, g;

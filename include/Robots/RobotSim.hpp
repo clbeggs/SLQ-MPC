@@ -11,7 +11,11 @@ class RobotInterface {
  public:
   virtual ~RobotInterface() {}
   virtual void step(state_t &resulting_state, state_t &state, control_t &u) {}
+  virtual state_t step(state_t &state, control_t &u) {}
   virtual void get_current_state(state_t &state) {}
+  virtual state_t get_current_state() {}
+  virtual void set_state(state_t &x) {}
+
   state_t reset_random() {}
 
  protected:

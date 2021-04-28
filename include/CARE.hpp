@@ -8,8 +8,6 @@
 
 class CARE {
  private:
-  typedef Eigen::Matrix<float, 8, 8> schur_matrix_t;
-  typedef Eigen::Matrix<float, 8, 4> factor_matrix_t;
   Eigen::RealSchur<schur_matrix_t> schur_;
   Eigen::FullPivLU<factor_matrix_t> FullPivLU_;
   int LWORK_;
@@ -18,10 +16,10 @@ class CARE {
   Eigen::VectorXd WORK_;
   Eigen::VectorXi IWORK_;
 
-  bool solve_iterative(schur_matrix_t &M, state_matrix_t &P, int max_iters,
+  bool solve_iterative(schur_matrix_t& M, state_matrix_t& P, int max_iters,
                        float epsilon);
 
-  bool solve_direct(schur_matrix_t &M, state_matrix_t &P);
+  bool solve_direct(schur_matrix_t& M, state_matrix_t& P);
 
  public:
   CARE();
@@ -32,8 +30,8 @@ class CARE {
      K - kalman gain
 
   */
-  bool solve_care(state_matrix_t &Q, control_matrix_t &R, state_matrix_t &A,
-                  control_gain_matrix_t &B, state_matrix_t &P,
-                  control_matrix_t &Rinv, bool use_iterative);
+  bool solve_care(state_matrix_t& Q, control_matrix_t& R, state_matrix_t& A,
+                  control_gain_matrix_t& B, state_matrix_t& P,
+                  control_matrix_t& Rinv, bool use_iterative);
 };
 #endif  // CARE_H

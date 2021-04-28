@@ -25,11 +25,11 @@ class LQR : public CARE {
                control_gain_matrix_t &B, control_feedback_t &K,
                state_matrix_t &P);
 
+  void change_goal(state_t &x_g);
+
   vector<lqr_t> riccati_like(trajectory_t &traj, state_matrix_t &Q,
                              control_matrix_t &R);
 
-  CARE care;
-  Quadrotor quadrotor_system;
   CostFunction cost_fn;
   state_t goal_state;
 };
