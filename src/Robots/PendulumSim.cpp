@@ -38,12 +38,14 @@ Pendulum::~Pendulum() {
 void Pendulum::step(state_t &resulting_state, state_t &x_t, control_t &u_t) {
   this->pendulum_motor->setForce(u_t(0));
   robot->step(current_time);
+  // std::cout << "Time: " << robot->getTime() << std::endl;
   get_current_state(resulting_state);
 }
 
 state_t Pendulum::step(state_t &x_t, control_t &u_t) {
   this->pendulum_motor->setForce(u_t(0));
   robot->step(current_time);
+  // std::cout << "Time: " << robot->getTime() << std::endl;
   return get_current_state();
 }
 

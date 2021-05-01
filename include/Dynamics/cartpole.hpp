@@ -23,6 +23,13 @@ class CartPole {
   state_matrix_t f_x(state_t &x, control_t &u);
   control_gain_matrix_t f_u(state_t &x, control_t &u);
 
+  trajectory_t runge_kutta(state_t &x0, vector<control_t> &U);
+  state_t runge_kutta_step(state_t &x, control_t &u);
+
  private:
   float mass_pole, mass_cart, pole_length, g;
+
+  double N_c;
+  state_t _k1, _k2, _k3, _k4, _tmp;
+  double h;
 };

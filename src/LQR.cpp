@@ -42,6 +42,9 @@ bool LQR::compute(state_matrix_t &Q,
   return success;
 }
 
+// vector<lqr_t> LQR::riccati_like2(trajectory_t &traj, state_matrix_t &Q,
+// control_matrix_t &R, state_matrix_t &A) {
+// }
 vector<lqr_t> LQR::riccati_like(trajectory_t &traj, state_matrix_t &Q,
                                 control_matrix_t &R) {
   int N = traj.x.size();
@@ -74,18 +77,11 @@ vector<lqr_t> LQR::riccati_like(trajectory_t &traj, state_matrix_t &Q,
 
     g = out[i].r + (traj.B[i].transpose() * out[i + 1].p);
 
-    out[i].l_t = -H.inverse() * g;
-
-    std::cout << out[i].q << std::endl;
-    std::cout << (traj.A[i].transpose() * out[i + 1].p) << std::endl;
-    std::cout << (out[i].K.transpose() * H * out[i].l_t) << std::endl;
-    std::cout << (out[i].l_t.transpose() * g * state_t::Ones()) << std::endl;
-    std::cout << (G.transpose() * out[i].l_t) << std::endl;
+    out[i].l_t = (-1.0) * H.inverse() * g;
 
     out[i].p = out[i].q + (traj.A[i].transpose() * out[i + 1].p) +
                (out[i].K.transpose() * H * out[i].l_t) +
-               (out[i].l_t.transpose() * g * state_t::Ones()) +
-               (G.transpose() * out[i].l_t);
+               (out[i].K.transpose() * g) + (G.transpose() * out[i].l_t);
   }
 
   return out;

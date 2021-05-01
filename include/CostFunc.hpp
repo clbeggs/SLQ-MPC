@@ -11,6 +11,7 @@ class CostFunction {
     this->_stable_state = state_t::Ones();
     this->_hover = control_t::Zero();
     this->goal_state = state_t::Zero();
+    this->goal_state(0) = 10.0;
     this->goal_action = control_t::Zero();
   }
 

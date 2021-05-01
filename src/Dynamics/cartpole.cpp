@@ -6,14 +6,70 @@
 #include <types.hpp>
 
 CartPole::CartPole() {
-  mass_cart = 30.0;
+  mass_cart = 1.05;
   mass_pole = 0.05;
   g = 9.80665;
-  pole_length = 0.3;
+  pole_length = 0.6;
+  h = 0.002;
+  N_c = 1.0;
 }
 
 CartPole::~CartPole() {
 }
+
+state_t CartPole::runge_kutta_step(state_t &x, control_t &u) {
+  _k1 = forward_dynamics(x, u);
+
+  _tmp = x + ((_k1 * h) / 2.0);
+  _k2 = forward_dynamics(_tmp, u);
+
+  _tmp = x + ((_k2 * h) / 2.0);
+  _k3 = forward_dynamics(_tmp, u);
+
+  _tmp = x + _k3;
+  _k4 = forward_dynamics(_tmp, u);
+  return (x + (h / 6.0) * (_k1 + (2 * _k2) + (2 * _k3) + _k4));
+}
+trajectory_t CartPole::runge_kutta(state_t &x0, vector<control_t> &U) {
+  int N = U.size();
+  trajectory_t traj(N, x0);
+
+  // vector of dx, need to integrate!
+  for (int i = 0; i < N - 1; ++i) {
+    traj.x[i + 1] = runge_kutta_step(traj.x[i], U[i]);
+  }
+  return traj;
+}
+
+// state_t CartPole::forward_dynamics_friction(state_t &x_t, control_t &u_t) {
+// double mu = 0.02;  // from webots world file
+
+// state_t dx;
+// double p_x = x_t(0);
+// double theta = x_t(1);
+// double dp_x = x_t(2);
+// double dtheta = x_t(3);
+
+// double M = mass_pole + mass_cart;
+// double dtheta2 = pow(dtheta, 2.0);
+// double m_p = mass_pole;
+// double l = pole_length;
+// double stheta = sin(theta);
+// double ctheta = cos(theta);
+// double c2theta = pow(ctheta, 2.0);
+
+// dx(0) = dp_x;
+// dx(1) = dtheta;
+
+// double F = u_t(0);
+
+// // clang-format off
+// double a = ((-1.0) * F - (m_p * l * dtheta2 * (stheta + mu * N_c * ctheta)))
+// / M; double num = (g * stheta) + (ctheta * (a + (mu * g * N_c))) - ((mu *
+// dtheta) / (m_p * l));
+
+// // clang-format on
+// }
 
 state_t CartPole::forward_dynamics(state_t &x_t, control_t &u_t) {
   state_t dx;
@@ -23,28 +79,32 @@ state_t CartPole::forward_dynamics(state_t &x_t, control_t &u_t) {
   double dtheta = x_t(3);
 
   double M = mass_pole + mass_cart;
+  double dtheta2 = pow(dtheta, 2.0);
+  double m_p = mass_pole;
+  double l = pole_length;
+  double stheta = sin(theta);
+  double ctheta = cos(theta);
+  double c2theta = pow(ctheta, 2.0);
+
   dx(0) = dp_x;
   dx(1) = dtheta;
 
-  // clang-format off
-  double num = (g * sin(theta)) + ((cos(theta) * ((-u_t(0) - mass_pole * pole_length * pow(dtheta, 2.0) * sin(theta))))/M);
-  dx(3) = num / (pole_length * ((4.0 / 3.0) - (mass_pole * (pow(cos(theta), 2.0)) / M)));
+  double F = u_t(0);
+  double a = (((-1.0) * F) - (m_p * l * dtheta2 * stheta)) / M;
+  double denom = l * ((4.0 / 3.0) - ((m_p * c2theta) / M));
 
-  num = 0.0;
-  num = u_t(0) + mass_pole * pole_length * ((pow(dtheta, 2.0) * sin(theta)) - (dx(3) * cos(theta)));
-  dx(2) = num / M;
+  // clang-format off
+  dx(3) = ((g * stheta) + (ctheta * a)) / denom;
+
+  a = m_p * l * (dtheta2 * stheta - dx(3) * ctheta);
+  dx(2) = (F + a) / M;
   // clang-format on
+
   return dx;
 }
 
 trajectory_t CartPole::simulate_rollout(vector<control_t> &u, state_t &x0) {
-  int N = u.size();
-  trajectory_t traj(N, x0);
-
-  for (int i = 0; i < N - 1; ++i) {
-    traj.x[i + 1] = forward_dynamics(traj.x[i], u[i]);
-  }
-  return traj;
+  return runge_kutta(x0, u);
 }
 
 state_matrix_t CartPole::f_x(state_t &x_t, control_t &u_t) {

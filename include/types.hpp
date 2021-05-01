@@ -25,7 +25,14 @@ typedef Eigen::Matrix<double, 4, 1> control_gain_matrix_t;
 typedef Eigen::Matrix<double, 1, 4> control_feedback_t;
 
 struct lqr_t {
-  lqr_t() { l_t = control_t::Zero(); }
+  lqr_t() {
+    l_t = control_t::Zero();
+    K = control_feedback_t::Zero();
+    P = state_matrix_t::Zero();
+    p = state_t::Zero();
+    r = control_t::Zero();
+    q = state_t::Zero();
+  }
   lqr_t(double val) {
     l_t = control_t::Ones() * val;
     K = control_feedback_t::Zero();

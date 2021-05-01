@@ -4,10 +4,12 @@
 #include <LQR.hpp>
 #include <MujocoInterface.hpp>
 #include <SLQ.hpp>
+#include <array>
 #include <iostream>
 #include <types.hpp>
 #include <vector>
 
+using std::array;
 using std::vector;
 
 SLQ::SLQ() {
@@ -133,16 +135,69 @@ void SLQ::second_expansion(forward_t &f_out, state_t &V_x, state_matrix_t &V_xx,
   q->Q_uu = f_out.B.transpose() * (V_xx + reg) * f_out.B;
 }
 
+void SLQ::update_control(vector<control_t> &u, trajectory_t &traj,
+                         trajectory_t &old_traj, vector<lqr_t> &ric,
+                         state_matrix_t &Q, control_matrix_t &R,
+                         state_matrix_t &P_tf, state_t &x_0, float &J_0) {
+  float J_new = J_0 + 1;
+  int N = traj.x.size();
+  bool converged = false;
+  vector<control_t> u_new(N, control_t::Zero());
+  trajectory_t new_traj(N, traj.x[0]);
+
+  int A = alphas.size();
+  for (int k = 0; k < A; ++k) {  // Line search iters
+
+    // Apply controls, simulate rollout
+    // clang-format off
+    for (int i = 0; i < N - 1; i++) {
+
+      // std::cout << "rand: " << control_t::Random() * this->pows[k] << " - "  << this->pows[k] << ":::" << k << std::endl;
+
+      // std::cout << "====== l_t: " << ric[i].l_t << "========= "<< this->alphas[k] << std::endl;
+      // std::cout << "====== Kx: " << (ric[i].K * (new_traj.x[i] - old_traj.x[i])) << std::endl;
+      u_new[i] = u[i] + (this->alphas[k] * ric[i].l_t) - (ric[i].K * (new_traj.x[i] - old_traj.x[i]));
+      // u_new[i] = (-1.0) * u_new[i];
+
+      for (int j = 0; j < u[i].rows(); ++j) {
+        if (isnan(u_new[i](j))) {
+          u_new[i] = control_t::Ones() * 40.0;
+        }
+      }
+      u_new[i] = u_new[i].array().min(40.0).max(-40.0).matrix();
+
+      // std::cout << "UUUUUUUU New u: " << u_new[i] << " --- old u: " << u[i] << std::endl;
+      new_traj.x[i + 1] = sys.runge_kutta_step(new_traj.x[i], u_new[i]);
+    }
+    std::cout << "New xn-1: " << new_traj.x[N-1] << std::endl;
+    std::cout << "Old xn-1: " << old_traj.x[N-1] << std::endl;
+
+    // Get cost of new trajectory
+    sys.linearize_trajectory(new_traj);
+    J_new = cost_fn.quadratize_trajectory_cost(new_traj, Q, R, P_tf);
+    std::cout << "JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ New: " << J_new << " old: " << J_0 << " -- " << J_new - J_0 << std::endl << std::endl << std::endl;
+    // clang-format on
+    if (J_new < J_0) {
+      converged = true;
+      break;
+    }
+  }
+  for (int i = 0; i < N; i++) {
+    u[i] = u_new[i];
+  }
+}
+
 // clang-format off
 state_t SLQ::solve_slq(state_matrix_t &Q,
-                    control_matrix_t &R,
-                    state_matrix_t &W,
-                    state_matrix_t &P_tf,
-                    vector<control_t> &u, 
-                    state_t &x_0, 
-                    state_t &x_g) {
+                       control_matrix_t &R,
+                       state_matrix_t &W,
+                       state_matrix_t &P_tf,
+                       vector<control_t> &u, 
+                       state_t &x_0, 
+                       state_t &x_g) {
   // clang-format on
   lqr.change_goal(x_g);
+  this->alpha = this->alpha_0;
 
   // Simulate system dynamics
   trajectory_t old_traj = sys.simulate_rollout(u, x_0);
@@ -153,7 +208,7 @@ state_t SLQ::solve_slq(state_matrix_t &Q,
 
   // Quadratize cost along trajectory
   float J_0 = cost_fn.quadratize_trajectory_cost(old_traj, Q, R, P_tf);
-  float J_new = J_0 + 1;
+  vector<control_t> u_cpy;
 
   int main_loop_iters = 0;
   while (this->max_loop_iters > main_loop_iters) {
@@ -166,32 +221,28 @@ state_t SLQ::solve_slq(state_matrix_t &Q,
 
     // Backwards solve Ricatti-like diff. eqn.'s
     vector<lqr_t> ric = riccati_like(traj, Q, R);
+    u_cpy = u;
 
     // Line search to update control
-    int N = traj.x.size();
-    for (int i = 0; i < N; i++) {
-      std::cout << (ric[i].K * (traj.x[i] - old_traj.x[i])) << std::endl;
-      u[i] = u[i] + (this->alpha * ric[i].l_t) +
-             (ric[i].K * (traj.x[i] - old_traj.x[i]));
-      for (int j = 0; j < u[i].rows(); ++j) {
-        if (isnan(u[i](j))) {
-          u[i] = control_t::Ones() * 40.0;
-        }
-      }
-      u[i] = u[i].array().min(40.0).max(-40.0).matrix();
-    }
+    update_control(u, traj, old_traj, ric, Q, R, P_tf, x_0, J_0);
+    // double mean = 0.0;
+    // int N = traj.x.size();
+    // for (int i = 0; i < N; ++i) {
+    // mean += (u[i] - u_cpy[i]).squaredNorm();
+    // }
+    // std::cout << "Control Change Mean: " << mean / (double)N << std::endl;
 
-    traj = sys.simulate_rollout(u, x_0);
-    sys.linearize_trajectory(traj);
-    J_new = cost_fn.quadratize_trajectory_cost(traj, Q, R, P_tf);
-    if (J_new < J_0) {
-      break;
-    }
     main_loop_iters += 1;
   }
   state_t final_state;
-  simulator->step(final_state, x_0, u[0]);
-  std::cout << "STEP: " << u[0] << std::endl;
+
+  // std::cout << "=================" << std::endl;
+  // std::cout << u[0] << std::endl;
+  // u[0](0) = (-1.0) * u[0](0);
+  // std::cout << "+++++++++++++++++" << std::endl;
+  // std::cout << u[0] << std::endl;
+  final_state = simulator->step(x_0, u[0]);
+  // std::cout << "STEP: " << u[0] << std::endl;
   return final_state;
 }
 

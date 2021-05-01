@@ -107,12 +107,17 @@ float CostFunction::quadratize_trajectory_cost(trajectory_t &traj,
                                                control_matrix_t &R,
                                                state_matrix_t &P_tf) {
   int N = traj.x.size();
-  // x_tf = traj.x[N-1];
-  float J = (traj.x[N - 1].transpose() * P_tf * traj.x[N - 1])(0);
+  state_t p_tf = state_t::Ones() * 50.0;
+
+  state_t x_diff = (traj.x[N - 1] - this->goal_state);
+
+  double J = (x_diff.transpose() * p_tf)(0) +
+             ((1.0 / 2.0) * (x_diff.transpose() * P_tf * x_diff))(0);
 
   for (int i = 0; i < N; i++) {
-    J += (traj.x[i].transpose() * Q * traj.x[i])(0) +
-         (traj.u[i].transpose() * R * traj.u[i])(0);
+    traj.x[i](0) = traj.x[i](0) * (-1.0);
+    J += l(traj.x[i], traj.u[i], Q, R);
+    traj.x[i](0) = traj.x[i](0) * (-1.0);
   }
   return J;
 }
@@ -121,7 +126,8 @@ float CostFunction::traj_cost(std::vector<state_t> &x,
                               std::vector<control_t> &u, state_matrix_t &Q,
                               control_matrix_t &R, state_matrix_t &H) {
   int N = x.size();
-  float J = (x[N - 1].transpose() * H * x[N - 1])(0);
+  // float J = (x[N - 1].transpose() * H * x[N - 1])(0);
+  float J = 0.0;
   for (int i = 0; i < N; i++) {
     J += l(x[i], u[i], Q, R);
   }
